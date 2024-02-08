@@ -50,11 +50,11 @@ class motion_executioner(Node):
                         durability=QoSDurabilityPolicy.VOLATILE)
         
         # Part 3: Create a publisher to send velocity commands by setting the proper parameters in (...)
-        self.vel_publisher=self.create_publisher(Twist,'velocity',qos_profile)
+        self.vel_publisher=self.create_publisher(Twist,'/cmd_vel',qos_profile)
 
         self.current_linear_vel = 0.5
         self.current_angular_vel = 0.0
-        self.accel = 0.1
+        self.accel = 0.3
                 
         # loggers
         self.imu_logger=Logger('imu_content_'+str(motion_types[motion_type])+'.csv', headers=["acc_x", "acc_y", "angular_z", "stamp"])
@@ -94,6 +94,8 @@ class motion_executioner(Node):
         angular_z = imu_msg.angular_velocity.z
         stamp = imu_msg.header.stamp.sec
 
+        self.imu_initialized = True
+
         imu_data = {"acc_x": acc_x, "acc_y": acc_y, "angular_z": angular_z, "stamp": stamp}
 
         self.imu_values.append(imu_data)
@@ -106,6 +108,8 @@ class motion_executioner(Node):
         th = odom_msg.pose.pose.orientation.z
         stamp = odom_msg.header.stamp.sec
 
+        self.odom_initialized = True
+
         odom_data = {"x": x, "y": y, "th": th, "stamp": stamp}
 
         self.odom_values.append(odom_data)
@@ -115,6 +119,8 @@ class motion_executioner(Node):
         ranges = laser_msg.ranges
         stamp = laser_msg.header.stamp.sec
 
+        self.laser_initialized = True
+
         laser_data = {"ranges": ranges, "stamp": stamp}
 
         self.laser_values.append(laser_data)
@@ -122,7 +128,7 @@ class motion_executioner(Node):
 
                 
     def timer_callback(self):
-        
+
         if self.odom_initialized and self.laser_initialized and self.imu_initialized:
             self.successful_init=True
             
@@ -139,6 +145,7 @@ class motion_executioner(Node):
                         
         elif self.type==ACC_LINE:
             cmd_vel_msg=self.make_acc_line_twist()
+            print(cmd_vel_msg)
             
         else:
             print("type not set successfully, 0: CIRCLE 1: SPIRAL and 2: ACCELERATED LINE")
@@ -153,17 +160,27 @@ class motion_executioner(Node):
         
         msg=Twist()
         # decrease angular velocity in z
+        self.current_angular_vel = 1.0
+        self.current_linear_vel = 5.0
 
+        msg.angular.z = self.current_angular_vel
+        msg.linear.x = self.current_linear_vel
         return msg
 
     def make_spiral_twist(self): # spiral
         msg=Twist()
         self.current_angular_vel = 1.0
+        self.current_linear_vel = 5.0
+        
+        self.current_linear_vel += self.accel * 0.1
+        msg.angular.z = self.current_angular_vel
+        msg.linear.x = self.current_linear_vel
         return msg
     
     def make_acc_line_twist(self): # line
         msg=Twist()
         self.current_linear_vel += self.accel * 0.1
+        # print("linear vel is ", self.current_linear_vel)
         msg.linear.x = self.current_linear_vel
         return msg
 
@@ -186,7 +203,7 @@ if __name__=="__main__":
     elif args.motion.lower() == "line":
         print("line detected")
         ME=motion_executioner(motion_type=ACC_LINE)
-        time.sleep(5.0)
+        print("type is ", ME.type)
 
     elif args.motion.lower() =="spiral":
         ME=motion_executioner(motion_type=SPIRAL)

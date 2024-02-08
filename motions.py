@@ -99,6 +99,7 @@ class motion_executioner(Node):
         imu_data = {"acc_x": acc_x, "acc_y": acc_y, "angular_z": angular_z, "stamp": stamp}
 
         self.imu_values.append(imu_data)
+        self.imu_logger.log_values(self.imu_values)
         return self.imu_values
 
         
@@ -113,6 +114,7 @@ class motion_executioner(Node):
         odom_data = {"x": x, "y": y, "th": th, "stamp": stamp}
 
         self.odom_values.append(odom_data)
+        self.odom_logger.log_values(self.odom_values)
         return self.odom_values
                 
     def laser_callback(self, laser_msg: LaserScan):
@@ -124,10 +126,13 @@ class motion_executioner(Node):
         laser_data = {"ranges": ranges, "stamp": stamp}
 
         self.laser_values.append(laser_data)
+        self.laser_logger.log_values(self.laser_values)
         return self.laser_values
 
                 
     def timer_callback(self):
+
+        i = 0
 
         if self.odom_initialized and self.laser_initialized and self.imu_initialized:
             self.successful_init=True
@@ -150,6 +155,10 @@ class motion_executioner(Node):
         else:
             print("type not set successfully, 0: CIRCLE 1: SPIRAL and 2: ACCELERATED LINE")
             raise SystemExit 
+
+        # if self.imu_values:
+        #     self.imu_logger.log_values([self.imu_values["acc_x"], self.imu_values["acc_y"], self.imu.values["angular_z"], self.imu_values["stamp"]])
+
 
         self.vel_publisher.publish(cmd_vel_msg)
         

@@ -24,12 +24,13 @@ class Logger:
             vals_str=""
             
             for value in values_list:
-                vals_str = str(value)
-                # vals_str+="\n"
+                vals_str += str(value) + ", "
             
-                file.write(vals_str)
-                file.write("\n")
-            
+            vals_str = vals_str.rstrip(', ')
+
+            vals_str+="\n"
+            file.write(vals_str)
+                # file.write("\n")
 
     def save_log(self):
         pass

@@ -17,7 +17,7 @@ from sensor_msgs.msg import Imu
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 
-import time
+from rclpy.time import Time
 
 # You may add any other imports you may need/want to use below
 # import ...
@@ -46,15 +46,20 @@ class motion_executioner(Node):
         # TODO Part 3: Create the QoS profile by setting the proper parameters in (...)
         qos_profile=QoSProfile(history=QoSHistoryPolicy.KEEP_LAST,
                         depth=10,
+                        reliability=QoSReliabilityPolicy.BEST_EFFORT,
+                        durability=QoSDurabilityPolicy.VOLATILE)
+        
+        cmd_vel_qos = QoSProfile(history=QoSHistoryPolicy.KEEP_LAST,
+                        depth=10,
                         reliability=QoSReliabilityPolicy.RELIABLE,
                         durability=QoSDurabilityPolicy.VOLATILE)
         
         # Part 3: Create a publisher to send velocity commands by setting the proper parameters in (...)
-        self.vel_publisher=self.create_publisher(Twist,'/cmd_vel',qos_profile)
-
-        self.current_linear_vel = 0.5
+        self.vel_publisher=self.create_publisher(Twist,'/cmd_vel', cmd_vel_qos)
+ 
+        self.current_linear_vel = 0.1
         self.current_angular_vel = 0.0
-        self.accel = 0.3
+        self.accel = 5
                 
         # loggers
         self.imu_logger=Logger('imu_content_'+str(motion_types[motion_type])+'.csv', headers=["acc_x", "acc_y", "angular_z", "stamp"])
@@ -92,14 +97,15 @@ class motion_executioner(Node):
         acc_x = imu_msg.linear_acceleration.x
         acc_y = imu_msg.linear_acceleration.y
         angular_z = imu_msg.angular_velocity.z
-        stamp = imu_msg.header.stamp.sec
+        # stamp = imu_msg.header.stamp.nanosec
+        stamp = Time.from_msg(imu_msg.header.stamp).nanoseconds
 
         self.imu_initialized = True
 
-        imu_data = {"acc_x": acc_x, "acc_y": acc_y, "angular_z": angular_z, "stamp": stamp}
+        imu_data = [acc_x, acc_y, angular_z, stamp]
 
-        self.imu_values.append(imu_data)
-        self.imu_logger.log_values(self.imu_values)
+        # self.imu_values.append(imu_data)
+        self.imu_logger.log_values(imu_data)
         return self.imu_values
 
         
@@ -107,26 +113,26 @@ class motion_executioner(Node):
         x = odom_msg.pose.pose.position.x
         y = odom_msg.pose.pose.position.y
         th = odom_msg.pose.pose.orientation.z
-        stamp = odom_msg.header.stamp.sec
+        stamp = Time.from_msg(odom_msg.header.stamp).nanoseconds
 
         self.odom_initialized = True
 
-        odom_data = {"x": x, "y": y, "th": th, "stamp": stamp}
+        odom_data = [x, y, th, stamp]
 
-        self.odom_values.append(odom_data)
-        self.odom_logger.log_values(self.odom_values)
+        # self.odom_values.append(odom_data)
+        self.odom_logger.log_values(odom_data)
         return self.odom_values
                 
     def laser_callback(self, laser_msg: LaserScan):
         ranges = laser_msg.ranges
-        stamp = laser_msg.header.stamp.sec
+        stamp = Time.from_msg(laser_msg.header.stamp).nanoseconds
 
         self.laser_initialized = True
 
-        laser_data = {"ranges": ranges, "stamp": stamp}
+        laser_data = [ranges, stamp]
 
-        self.laser_values.append(laser_data)
-        self.laser_logger.log_values(self.laser_values)
+        # self.laser_values.append(laser_data)
+        self.laser_logger.log_values(laser_data)
         return self.laser_values
 
                 
@@ -150,7 +156,6 @@ class motion_executioner(Node):
                         
         elif self.type==ACC_LINE:
             cmd_vel_msg=self.make_acc_line_twist()
-            print(cmd_vel_msg)
             
         else:
             print("type not set successfully, 0: CIRCLE 1: SPIRAL and 2: ACCELERATED LINE")
@@ -169,8 +174,8 @@ class motion_executioner(Node):
         
         msg=Twist()
         # decrease angular velocity in z
-        self.current_angular_vel = 1.0
-        self.current_linear_vel = 5.0
+        self.current_angular_vel = 5.0
+        self.current_linear_vel = 2.0
 
         msg.angular.z = self.current_angular_vel
         msg.linear.x = self.current_linear_vel
@@ -178,12 +183,14 @@ class motion_executioner(Node):
 
     def make_spiral_twist(self): # spiral
         msg=Twist()
-        self.current_angular_vel = 1.0
-        self.current_linear_vel = 5.0
+        self.current_angular_vel = 5.0
+        # self.current_linear_vel = 1.0
+
+        self.radius_ += float(self.current_linear_vel/self.current_angular_vel)
         
-        self.current_linear_vel += self.accel * 0.1
         msg.angular.z = self.current_angular_vel
-        msg.linear.x = self.current_linear_vel
+        msg.linear.x = self.current_linear_vel + self.radius_
+        # msg.linear.x += self.radius_
         return msg
     
     def make_acc_line_twist(self): # line
@@ -210,9 +217,7 @@ if __name__=="__main__":
 
         ME=motion_executioner(motion_type=CIRCLE)
     elif args.motion.lower() == "line":
-        print("line detected")
         ME=motion_executioner(motion_type=ACC_LINE)
-        print("type is ", ME.type)
 
     elif args.motion.lower() =="spiral":
         ME=motion_executioner(motion_type=SPIRAL)
